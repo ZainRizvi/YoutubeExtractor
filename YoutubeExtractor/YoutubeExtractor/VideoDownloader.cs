@@ -32,9 +32,18 @@ namespace YoutubeExtractor
         /// <exception cref="WebException">An error occured while downloading the video.</exception>
         public override void Execute()
         {
+
+            using (FileStream target = File.Open(this.SavePath, FileMode.Create, FileAccess.Write))
+            {
+                Execute(target);
+            }
+        }
+
+        public void Execute(Stream target)
+        {
             this.OnDownloadStarted(EventArgs.Empty);
 
-            var request = (HttpWebRequest)WebRequest.Create(this.Video.DownloadUrl);
+            var request = (HttpWebRequest) WebRequest.Create(this.Video.DownloadUrl);
 
             if (this.BytesToDownload.HasValue)
             {
@@ -46,29 +55,26 @@ namespace YoutubeExtractor
             {
                 using (Stream source = response.GetResponseStream())
                 {
-                    using (FileStream target = File.Open(this.SavePath, FileMode.Create, FileAccess.Write))
+                    var buffer = new byte[1024];
+                    bool cancel = false;
+                    int bytes;
+                    int copiedBytes = 0;
+
+                    while (!cancel && (bytes = source.Read(buffer, 0, buffer.Length)) > 0)
                     {
-                        var buffer = new byte[1024];
-                        bool cancel = false;
-                        int bytes;
-                        int copiedBytes = 0;
+                        target.Write(buffer, 0, bytes);
 
-                        while (!cancel && (bytes = source.Read(buffer, 0, buffer.Length)) > 0)
+                        copiedBytes += bytes;
+
+                        var eventArgs = new ProgressEventArgs((copiedBytes*1.0/response.ContentLength)*100);
+
+                        if (this.DownloadProgressChanged != null)
                         {
-                            target.Write(buffer, 0, bytes);
+                            this.DownloadProgressChanged(this, eventArgs);
 
-                            copiedBytes += bytes;
-
-                            var eventArgs = new ProgressEventArgs((copiedBytes * 1.0 / response.ContentLength) * 100);
-
-                            if (this.DownloadProgressChanged != null)
+                            if (eventArgs.Cancel)
                             {
-                                this.DownloadProgressChanged(this, eventArgs);
-
-                                if (eventArgs.Cancel)
-                                {
-                                    cancel = true;
-                                }
+                                cancel = true;
                             }
                         }
                     }
